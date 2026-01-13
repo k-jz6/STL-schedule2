@@ -1,4 +1,81 @@
 // ============================================
+// 履歴管理 (Undo/Redo)
+// ============================================
+const HistoryManager = {
+    stack: [],
+    currentIndex: -1,
+    limit: 30,
+    isRestoring: false,
+
+    init(initialState) {
+        this.stack = [JSON.stringify(initialState)];
+        this.currentIndex = 0;
+        this.updateButtons();
+    },
+
+    record(state) {
+        if (this.isRestoring) return;
+        // 現在位置より先の履歴は破棄
+        if (this.currentIndex < this.stack.length - 1) {
+            this.stack = this.stack.slice(0, this.currentIndex + 1);
+        }
+        // 新しい状態を追加
+        const json = JSON.stringify(state);
+        // 直前と同じなら保存しない
+        if (this.stack[this.currentIndex] === json) return;
+
+        this.stack.push(json);
+        if (this.stack.length > this.limit) {
+            this.stack.shift();
+        } else {
+            this.currentIndex++;
+        }
+        this.updateButtons();
+    },
+
+    undo() {
+        if (this.currentIndex > 0) {
+            this.currentIndex--;
+            this.performRestore();
+        }
+    },
+
+    redo() {
+        if (this.currentIndex < this.stack.length - 1) {
+            this.currentIndex++;
+            this.performRestore();
+        }
+    },
+
+    performRestore() {
+        this.isRestoring = true;
+        const data = JSON.parse(this.stack[this.currentIndex]);
+        
+        const scrollContainer = document.querySelector(".gantt-scroll-container");
+        const savedScrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
+        const savedScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+
+        restoreFromData(data); 
+        DataManager.save(data);
+
+        if (scrollContainer) {
+            scrollContainer.scrollLeft = savedScrollLeft;
+            scrollContainer.scrollTop = savedScrollTop;
+        }
+
+        this.isRestoring = false;
+        this.updateButtons();
+    },
+
+    updateButtons() {
+        const undoBtn = document.getElementById("undoBtn");
+        const redoBtn = document.getElementById("redoBtn");
+        if(undoBtn) undoBtn.disabled = (this.currentIndex <= 0);
+        if(redoBtn) redoBtn.disabled = (this.currentIndex >= this.stack.length - 1);
+    }
+};
+
+// ============================================
 // データ保存管理
 // ============================================
 const DataManager = {
@@ -85,13 +162,11 @@ let timelineDays = [];
 let taskObjects = [];
 let activeTaskId = null;
 let activeProgressSegmentId = null; 
-let selectionMode = 0; // 0:通常, 1:全選択, 2:全解除 (メイン画面用)
+let selectionMode = 0; 
 
-// ToDoリスト用変数 (グローバル化)
 let currentTodoDate = new Date();
 let todoSelectionState = false; 
 
-// ドラッグ操作用状態変数
 let dragState = {
     isDragging: false,
     type: null,
@@ -115,11 +190,10 @@ const freeMemo = document.getElementById("freeMemo");
 const showHiddenCheck = document.getElementById("showHiddenCheck");
 const projectNameInput = document.getElementById("projectNameInput");
 
-// コンテキストメニュー用
-const contextMenu = document.getElementById("contextMenu"); // 行用
+const contextMenu = document.getElementById("contextMenu");
 let contextMenuTargetTaskId = null;
 
-const segmentContextMenu = document.getElementById("segmentContextMenu"); // セグメント用
+const segmentContextMenu = document.getElementById("segmentContextMenu");
 let contextMenuTargetSegId = null;
 let contextMenuTargetTaskForSeg = null;
 
@@ -186,17 +260,19 @@ function syncDataModel() {
 function triggerSave() {
     syncDataModel();
     calculateTotals();
+    HistoryManager.record(appData);
     DataManager.save(appData);
 }
 
-projectNameInput.addEventListener("input", () => {
+projectNameInput.addEventListener("change", () => {
     document.title = projectNameInput.value + " | 工程表";
     triggerSave();
 });
-freeMemo.addEventListener("input", triggerSave);
-
+freeMemo.addEventListener("input", () => {
+    triggerSave();
+});
 ["lh1", "lh2", "lh3"].forEach(id => {
-    document.getElementById(id).addEventListener("input", triggerSave);
+    document.getElementById(id).addEventListener("blur", triggerSave);
 });
 
 // ============================================
@@ -207,6 +283,7 @@ async function initializeApp() {
     const savedData = await DataManager.load();
     if (savedData) {
         restoreFromData(savedData);
+        setTimeout(scrollToToday, 100);
     } else {
         document.getElementById("lh1").textContent = appData.headers[0];
         document.getElementById("lh2").textContent = appData.headers[1];
@@ -215,9 +292,10 @@ async function initializeApp() {
         buildTimeline();
         buildHeader();
         addTaskRow();
-        scrollToToday();
+        setTimeout(scrollToToday, 100);
         document.title = appData.projectName + " | 工程表";
     }
+    HistoryManager.init(appData);
     setupControlEvents();
 }
 
@@ -229,7 +307,6 @@ function restoreFromData(data) {
     }
     if (!appData.headers) appData.headers = ["項目1", "項目2", "時間"];
     
-    // ToDoカラムのデフォルト強制更新
     appData.todoColumns = "項目1, 項目2, 時間, 実施内容, 計画, 実績";
 
     projectNameInput.value = data.projectName || "標準の計画";
@@ -254,15 +331,16 @@ function restoreFromData(data) {
     } else {
         addTaskRow();
     }
-    setTimeout(scrollToToday, 100);
 }
 
 function scrollToToday() {
     const todayIdx = timelineDays.findIndex(d => d.iso === todayISO);
     if (todayIdx !== -1) {
         const x = todayIdx * CELL_WIDTH;
-        const containerWidth = ganttRight.clientWidth;
-        ganttRight.scrollLeft = x - (containerWidth / 2) + (CELL_WIDTH / 2);
+        const scrollContainer = document.querySelector(".gantt-scroll-container");
+        if (scrollContainer) {
+            scrollContainer.scrollLeft = x - (scrollContainer.clientWidth / 2) + 280; 
+        }
     }
 }
 
@@ -360,13 +438,11 @@ function addTaskRow(initialData = null) {
     const id = initialData ? initialData.id : "task_" + Date.now() + "_" + Math.random().toString(36).slice(2);
     const total = timelineDays.length;
 
-    // 左側
     const leftRow = document.createElement("div");
     leftRow.className = "left-row";
     if (initialData && initialData.isDone) leftRow.classList.add("task-done");
     if (initialData && initialData.isHidden) leftRow.classList.add("task-hidden");
 
-    // グリップ（ドラッグハンドル）と選択機能
     const grip = document.createElement("div");
     grip.className = "drag-handle"; 
     grip.dataset.taskId = id;
@@ -418,7 +494,7 @@ function addTaskRow(initialData = null) {
         const cell = document.createElement("div"); cell.className = "label-cell";
         const ed = document.createElement("div"); ed.className = "editable"; ed.contentEditable = "true"; ed.dataset.placeholder = ph;
         if (text) ed.textContent = text;
-        ed.addEventListener('input', triggerSave);
+        ed.addEventListener('blur', triggerSave);
         cell.appendChild(ed);
         return cell;
     };
@@ -429,7 +505,6 @@ function addTaskRow(initialData = null) {
     leftRow.addEventListener('contextmenu', (e) => { e.preventDefault(); showContextMenu(e, id); });
     leftRowsContainer.appendChild(leftRow);
 
-    // 右側
     const row = document.createElement("div");
     row.className = "task-row";
     row.dataset.id = id;
@@ -832,13 +907,11 @@ function handleGlobalMouseUp(e) {
             seg.startDate = shiftDateStr(dragState.originalStartDate, dayDelta);
             seg.endDate = shiftDateStr(dragState.originalEndDate, dayDelta);
             
-            // 計画値(dailyValues)の移動
             if (seg.dailyValues) {
                 const newVals = {};
                 Object.keys(seg.dailyValues).forEach(iso => newVals[shiftDateStr(iso, dayDelta)] = seg.dailyValues[iso]);
                 seg.dailyValues = newVals;
             }
-            // 実績値(dailyResults)も一緒に移動させる
             if (seg.dailyResults) {
                 const newRes = {};
                 Object.keys(seg.dailyResults).forEach(iso => newRes[shiftDateStr(iso, dayDelta)] = seg.dailyResults[iso]);
@@ -904,12 +977,33 @@ function handleCellClick(task, index) {
             const endIso = clickedIso;
             const s = startIso < endIso ? startIso : endIso;
             const e = startIso < endIso ? endIso : startIso;
-            task.segments.push({
+            
+            const newSeg = {
                 id: "seg_" + Date.now() + "_" + Math.random().toString(36).slice(2),
-                startDate: s, endDate: e, type: "range", label: "新規作業", progressEndDate: null, dailyValues: {}, dailyResults: {}
-            });
-            task.pendingStartIndex = null; task.pendingStartDate = null;
-            renderAllSegments(); triggerSave();
+                startDate: s, endDate: e, type: "range", 
+                label: "...", 
+                progressEndDate: null, dailyValues: {}, dailyResults: {}
+            };
+            task.segments.push(newSeg);
+
+            task.pendingStartIndex = null; 
+            task.pendingStartDate = null;
+            
+            renderAllSegments();
+
+            setTimeout(() => {
+                const initialLabel = "新規作業";
+                const inputLabel = prompt("計画内容を入力してください:", initialLabel);
+                
+                if (inputLabel === null) {
+                    task.segments.pop(); 
+                    renderAllSegments();
+                } else {
+                    newSeg.label = (inputLabel.trim() === "") ? initialLabel : inputLabel;
+                    renderAllSegments();
+                    triggerSave();
+                }
+            }, 10);
         }
     }
 }
@@ -921,11 +1015,23 @@ function handleSegClick(task, seg, addMode) {
 
 function addSegEvents(el, task, seg) {
     el.addEventListener("click", (e) => { e.stopPropagation(); handleSegClick(task, seg, e.shiftKey); });
+    
     el.addEventListener("dblclick", (e) => {
+        e.preventDefault();
         e.stopPropagation();
-        const nl = window.prompt("ラベル:", seg.label || "");
-        if (nl !== null) { seg.label = nl.trim(); renderAllSegments(); triggerSave(); }
+        
+        if (window.getSelection) {
+            window.getSelection().removeAllRanges();
+        }
+        
+        const nl = window.prompt("計画内容:", seg.label || "");
+        if (nl !== null) { 
+            seg.label = nl.trim(); 
+            renderAllSegments(); 
+            triggerSave(); 
+        }
     });
+    
     el.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         e.stopPropagation(); 
@@ -1008,7 +1114,7 @@ document.getElementById("ctxSegProgress").addEventListener("click", () => {
 
 document.getElementById("ctxSegDelete").addEventListener("click", () => {
     if (contextMenuTargetTaskForSeg && contextMenuTargetSegId) {
-        if (confirm("本当に削除しますか？")) {
+        if (confirm("選択の計画を削除しますか？")) {
             contextMenuTargetTaskForSeg.segments = contextMenuTargetTaskForSeg.segments.filter(s => s.id !== contextMenuTargetSegId);
             if (activeProgressSegmentId === contextMenuTargetSegId) activeProgressSegmentId = null;
             renderAllSegments(); 
@@ -1025,6 +1131,9 @@ showHiddenCheck.addEventListener("change", (e) => {
 // イベント設定
 // ============================================
 function setupControlEvents() {
+    document.getElementById("undoBtn").addEventListener("click", () => HistoryManager.undo());
+    document.getElementById("redoBtn").addEventListener("click", () => HistoryManager.redo());
+
     document.getElementById("settingsButton").addEventListener("click", () => {
         document.getElementById("settingsStartDate").value = appData.settings.startDate;
         document.getElementById("settingsEndDate").value = appData.settings.endDate;
@@ -1049,7 +1158,8 @@ function setupControlEvents() {
         }
     });
 
-    document.getElementById("addRowBtn").addEventListener("click", () => addTaskRow());
+    // addRowBtn listener removed
+
     document.getElementById("downloadBtn").addEventListener("click", () => {
         syncDataModel();
         const blob = new Blob([JSON.stringify(appData, null, 2)], { type: "application/json" });
@@ -1073,7 +1183,6 @@ function setupControlEvents() {
         reader.readAsText(file);
     });
 
-    // ヘッダーアイコンクリック (3状態トグル)
     const rowSelectHeader = document.getElementById("rowSelectHeader");
     if (rowSelectHeader) {
         rowSelectHeader.textContent = "□";
@@ -1089,15 +1198,14 @@ function setupControlEvents() {
             if(delBtn) delBtn.style.display = (selectionMode !== 0) ? "inline-block" : "none";
 
             taskObjects.forEach(t => {
-                if (selectionMode === 1) t.isSelected = true;       // 全選択
-                else if (selectionMode === 2) t.isSelected = false; // 全解除
-                else t.isSelected = false;                          // 通常(リセット)
+                if (selectionMode === 1) t.isSelected = true; 
+                else if (selectionMode === 2) t.isSelected = false;
+                else t.isSelected = false;
                 renderGrip(t);
             });
         });
     }
 
-    // 選択行の削除ボタン (メイン画面)
     const deleteSelectedBtn = document.getElementById("deleteSelectedBtn");
     if (deleteSelectedBtn) {
         deleteSelectedBtn.addEventListener("click", () => {
@@ -1119,10 +1227,8 @@ function setupControlEvents() {
         });
     }
 
-    // ToDo列設定は固定化のためInputイベントは無視するが、一応残しておく
     document.getElementById("todoColumnsInput").addEventListener("change", triggerSave);
     
-    // [修正] Outlookボタンに機能を割り当て
     document.getElementById("outlookBtn").addEventListener("click", exportTodoToOutlookCSV);
     
     document.getElementById("todoCsvBtn").addEventListener("click", exportTodoToCSV);
@@ -1130,7 +1236,6 @@ function setupControlEvents() {
     const todoBtn = document.getElementById("todoBtn");
     if(todoBtn) todoBtn.addEventListener("click", () => {
          const todoPanel = document.getElementById("todoPanel");
-         // [修正] ローカル変数ではなくグローバル変数へ代入
          currentTodoDate = new Date(); 
          updateTodoTable(currentTodoDate);
          todoPanel.classList.remove("settings-hidden"); 
@@ -1138,9 +1243,6 @@ function setupControlEvents() {
     
     initTodoFeature();
 }
-
-// ToDoリスト内の選択状態管理変数
-// 上部で宣言済み
 
 function updateTodoTable(dateObj) {
     const todoDateDisplay = document.getElementById("todoDateDisplay");
@@ -1167,7 +1269,6 @@ function updateTodoTable(dateObj) {
         colgroup.appendChild(col);
     });
 
-    // カラム定義
     const h1 = document.getElementById("lh1").textContent;
     const h2 = document.getElementById("lh2").textContent;
     const h3 = document.getElementById("lh3").textContent;
@@ -1179,26 +1280,22 @@ function updateTodoTable(dateObj) {
     thead.innerHTML = "";
     const trH = document.createElement("tr");
 
-    // ヘッダー作成
     displayCols.forEach((colName, idx) => {
         const th = document.createElement("th");
         th.textContent = colName;
-        // 左端(選択列)の処理
         if (idx === 0) {
             th.style.cursor = "pointer";
             th.style.textAlign = "center";
             th.textContent = todoSelectionState ? "☑️" : "□";
             th.addEventListener("click", () => {
-                todoSelectionState = !todoSelectionState; // トグル
+                todoSelectionState = !todoSelectionState; 
                 th.textContent = todoSelectionState ? "☑️" : "□";
                 
-                // ボディ内の全チェックボックスを連動させる
                 const checkboxes = document.querySelectorAll(".todo-row-checkbox");
                 checkboxes.forEach(cb => {
                     cb.textContent = todoSelectionState ? "☑️" : "□";
                     cb.dataset.checked = todoSelectionState ? "true" : "false";
                 });
-                // ボタン表示状態更新
                 checkTodoDeleteBtnVisibility();
             });
         }
@@ -1235,7 +1332,7 @@ function updateTodoTable(dateObj) {
                         td.style.textAlign = "center";
                         td.style.cursor = "pointer";
                         td.className = "todo-row-checkbox";
-                        td.textContent = todoSelectionState ? "☑️" : "□"; // 初期状態はヘッダーに合わせる
+                        td.textContent = todoSelectionState ? "☑️" : "□"; 
                         td.dataset.checked = todoSelectionState ? "true" : "false";
                         
                         td.addEventListener("click", (e) => {
@@ -1304,7 +1401,6 @@ function updateTodoTable(dateObj) {
     checkTodoDeleteBtnVisibility();
 }
 
-// ボタン表示切替用関数
 function checkTodoDeleteBtnVisibility() {
     const delBtn = document.getElementById("todoDeleteBtn");
     if(!delBtn) return;
@@ -1312,13 +1408,10 @@ function checkTodoDeleteBtnVisibility() {
     delBtn.style.display = (checkedItems.length > 0) ? "inline-block" : "none";
 }
 
-// [追加] Outlook用CSV出力関数
 function exportTodoToOutlookCSV() {
     const iso = dateToISO(currentTodoDate);
-    // YYYY-MM-DD -> YYYY/MM/DD
     const dateStr = iso.replace(/-/g, '/');
 
-    // データ収集 (updateTodoTableと同じ条件で)
     const items = [];
     taskObjects.forEach(task => {
         if (task.isHidden) return;
@@ -1341,28 +1434,22 @@ function exportTodoToOutlookCSV() {
     const headers = ["件名","開始日","開始時刻","終了日","終了時刻","プライベート","公開する時間帯の種類","秘密度","優先度"];
     const rows = [];
 
-    // 開始 8:30 (分換算: 8*60+30 = 510)
     let currentMin = 510; 
 
     items.forEach((item) => {
-        // 件名: "項目1：実施内容"
         const subject = `${item.item1}：${item.desc}`;
 
-        // 開始時刻文字列生成
         const hStart = Math.floor(currentMin / 60);
         const mStart = currentMin % 60;
         const startTimeStr = `${hStart}:${pad2(mStart)}:00`;
 
-        // 終了時刻 (30分後)
         const endMin = currentMin + 30;
         const hEnd = Math.floor(endMin / 60);
         const mEnd = endMin % 60;
         const endTimeStr = `${hEnd}:${pad2(mEnd)}:00`;
 
-        // 次の項目のために時間を進める
         currentMin += 30;
 
-        // 行データ作成 (ダブルクォートで囲む)
         const rowData = [
             `"${subject.replace(/"/g, '""')}"`,
             `"${dateStr}"`,
@@ -1377,36 +1464,13 @@ function exportTodoToOutlookCSV() {
         rows.push(rowData.join(","));
     });
 
-    const csvContent = "\uFEFF" + headers.map(h => `"${h}"`).join(",") + "\n" + rows.join("\n");
-    
-    // ファイル名生成 (Outlook_YYYYMMDDHHMM.csv)
-    const d = new Date();
-    const Y = d.getFullYear();
-    const M = String(d.getMonth()+1).padStart(2,'0');
-    const D = String(d.getDate()).padStart(2,'0');
-    const h = String(d.getHours()).padStart(2,'0');
-    const m = String(d.getMinutes()).padStart(2,'0');
-    const filename = `Outlook_${Y}${M}${D}${h}${m}.csv`;
+    const csvContent = headers.map(h => `"${h}"`).join(",") + "\r\n" + rows.join("\r\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadAsShiftJIS(csvContent, `Outlook_${formatTimestamp(new Date())}.csv`);
 }
 
 function exportTodoToCSV() {
-    const d = new Date();
-    const Y = d.getFullYear();
-    const M = String(d.getMonth()+1).padStart(2,'0');
-    const D = String(d.getDate()).padStart(2,'0');
-    const h = String(d.getHours()).padStart(2,'0');
-    const m = String(d.getMinutes()).padStart(2,'0');
-    const filename = `ToDoList_${Y}${M}${D}${h}${m}.csv`;
-
+    const filename = `ToDoList_${formatTimestamp(new Date())}.csv`;
     const thead = document.getElementById("todoThead");
     const tbody = document.getElementById("todoTableBody");
     
@@ -1436,12 +1500,40 @@ function exportTodoToCSV() {
         return;
     }
 
-    const csvContent = "\uFEFF" + headers.join(",") + "\n" + rows.join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const csvContent = headers.join(",") + "\r\n" + rows.join("\r\n");
+    downloadAsShiftJIS(csvContent, filename);
+}
+
+function downloadAsShiftJIS(content, filename) {
+    if (typeof Encoding === "undefined") {
+        alert("文字コード変換ライブラリが読み込まれていません。インターネット接続を確認してください。\nとりあえずUTF-8(BOM付)で出力します。");
+        const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+    }
+
+    const unicodeList = [];
+    for (let i = 0; i < content.length; i++) {
+        unicodeList.push(content.charCodeAt(i));
+    }
+    
+    const sjisCodeList = Encoding.convert(unicodeList, {
+        to: 'SJIS',
+        from: 'UNICODE'
+    });
+    
+    const u8Array = new Uint8Array(sjisCodeList);
+    const blob = new Blob([u8Array], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
+    link.href = url;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1459,7 +1551,7 @@ function addTodoRow(dateObj) {
         label: "", 
         progressEndDate: null,
         dailyValues: {},
-        dailyResults: {} // 初期化
+        dailyResults: {}
     };
     newTask.segments.push(newSeg);
     renderAllSegments();
@@ -1470,9 +1562,6 @@ function addTodoRow(dateObj) {
 function initTodoFeature() {
     const todoPanel = document.getElementById("todoPanel");
     if (!todoPanel) return;
-    
-    // [修正] ローカル変数を削除し、グローバルの currentTodoDate を使用する
-    // let currentTodoDate = new Date(); 
     
     const update = () => updateTodoTable(currentTodoDate);
 
@@ -1498,7 +1587,6 @@ function initTodoFeature() {
         addTodoRow(currentTodoDate);
     });
     
-    // [追加] ToDo削除ボタンの動的追加
     const footerControls = document.querySelector(".todo-footer > div:nth-child(2)");
     if (!document.getElementById("todoDeleteBtn")) {
         const delBtn = document.createElement("button");
@@ -1509,7 +1597,7 @@ function initTodoFeature() {
         delBtn.style.fontSize = "12px";
         delBtn.style.marginLeft = "8px";
         delBtn.textContent = "🗑️ 選択行を削除";
-        delBtn.style.display = "none"; // 初期は非表示
+        delBtn.style.display = "none"; 
         
         delBtn.addEventListener("click", () => {
             const checkboxes = document.querySelectorAll(".todo-row-checkbox[data-checked='true']");
@@ -1559,7 +1647,11 @@ function initTodoFeature() {
     });
     document.addEventListener("mousemove", (e) => {
         if (!isDragging) return;
-        win.style.left = (initL + e.clientX - startX) + "px"; win.style.top = (initT + e.clientY - startY) + "px"; win.style.right = "auto";
+        win.style.left = (initL + e.clientX - startX) + "px"; 
+        win.style.top = (initT + e.clientY - startY) + "px";
+        
+        win.style.width = win.offsetWidth + "px";
+        win.style.height = win.offsetHeight + "px";
     });
     document.addEventListener("mouseup", () => { isDragging = false; header.style.cursor = "grab"; document.body.style.userSelect = ""; });
 }

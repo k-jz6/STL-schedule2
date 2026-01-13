@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>日程表</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/encoding-japanese/2.0.0/encoding.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -26,7 +27,9 @@
 
         <div class="top-bar">
             <div class="top-left">
-                <button id="addRowBtn" class="btn-primary" type="button" style="display:none;">＋ 行を追加</button>
+                <button id="undoBtn" class="btn-secondary" type="button" disabled>↩ 元に戻す</button>
+                <button id="redoBtn" class="btn-secondary" type="button" disabled>↪ やり直し</button>
+                <span class="sep">|</span>
                 <button id="deleteSelectedBtn" class="btn-secondary" type="button" style="color: #ef4444; border-color: #fca5a5; margin-right: 8px; display: none;">🗑️ 削除</button>
                 <label class="toggle-hidden-label">
                     <input type="checkbox" id="showHiddenCheck"> 非表示行を表示
@@ -39,21 +42,23 @@
         </div>
 
         <div id="gantt">
-            <div class="gantt-inner">
-                <div class="gantt-left">
-                    <div class="left-header">
-                        <div id="rowSelectHeader" style="cursor: pointer; text-align: center; font-size: 14px; line-height: 26px;">🔲</div>
-                        <div id="lh1" contenteditable="true">項目1</div>
-                        <div id="lh2" contenteditable="true">項目2</div>
-                        <div id="lh3" contenteditable="true">時間</div>
+            <div class="gantt-scroll-container">
+                <div class="gantt-inner">
+                    <div class="gantt-left">
+                        <div class="left-header sticky-target">
+                            <div id="rowSelectHeader" style="cursor: pointer; text-align: center; font-size: 14px; line-height: 26px;">🔲</div>
+                            <div id="lh1" contenteditable="true">項目1</div>
+                            <div id="lh2" contenteditable="true">項目2</div>
+                            <div id="lh3" contenteditable="true">時間</div>
+                        </div>
+                        <div id="leftRows" class="left-rows"></div>
+                        <div class="left-footer-placeholder">合計</div>
                     </div>
-                    <div id="leftRows" class="left-rows"></div>
-                    <div class="left-footer-placeholder">合計</div>
-                </div>
-                <div class="gantt-right" id="ganttRight">
-                    <div class="header-row" id="headerRow"></div>
-                    <div class="rows" id="rowsContainer"></div>
-                    <div id="totalRow" class="total-row"></div>
+                    <div class="gantt-right" id="ganttRight">
+                        <div class="header-row sticky-target" id="headerRow"></div>
+                        <div class="rows" id="rowsContainer"></div>
+                        <div id="totalRow" class="total-row"></div>
+                    </div>
                 </div>
             </div>
         </div>

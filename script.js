@@ -50,12 +50,12 @@ const HistoryManager = {
     performRestore() {
         this.isRestoring = true;
         const data = JSON.parse(this.stack[this.currentIndex]);
-
+        
         const scrollContainer = document.querySelector(".gantt-scroll-container");
         const savedScrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
         const savedScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
 
-        restoreFromData(data);
+        restoreFromData(data); 
         DataManager.save(data);
 
         if (scrollContainer) {
@@ -70,8 +70,8 @@ const HistoryManager = {
     updateButtons() {
         const undoBtn = document.getElementById("undoBtn");
         const redoBtn = document.getElementById("redoBtn");
-        if (undoBtn) undoBtn.disabled = (this.currentIndex <= 0);
-        if (redoBtn) redoBtn.disabled = (this.currentIndex >= this.stack.length - 1);
+        if(undoBtn) undoBtn.disabled = (this.currentIndex <= 0);
+        if(redoBtn) redoBtn.disabled = (this.currentIndex >= this.stack.length - 1);
     }
 };
 
@@ -138,7 +138,7 @@ const DataManager = {
 // ============================================
 const CELL_WIDTH = 28;
 const BASE_ROW_HEIGHT = 52;
-const SEGMENT_OFFSET_Y = 56;
+const SEGMENT_OFFSET_Y = 56; 
 
 const now = new Date();
 const todayISO = dateToISO(now);
@@ -152,7 +152,7 @@ let appData = {
         endDate: dateToISO(defaultEnd),
         holidays: []
     },
-    headers: ["項目1", "項目2", "時間"],
+    headers: ["項目1", "項目2", "時間"], 
     todoColumns: "項目1, 項目2, 時間, 実施内容, 計画, 実績",
     tasks: [],
     memo: ""
@@ -161,11 +161,11 @@ let appData = {
 let timelineDays = [];
 let taskObjects = [];
 let activeTaskId = null;
-let activeProgressSegmentId = null;
-let selectionMode = 0;
+let activeProgressSegmentId = null; 
+let selectionMode = 0; 
 
 let currentTodoDate = new Date();
-let todoSelectionState = false;
+let todoSelectionState = false; 
 
 let dragState = {
     isDragging: false,
@@ -248,7 +248,7 @@ function syncDataModel() {
     });
     appData.memo = freeMemo.innerHTML;
     appData.projectName = projectNameInput.value;
-
+    
     appData.headers = [
         document.getElementById("lh1").textContent,
         document.getElementById("lh2").textContent,
@@ -306,7 +306,7 @@ function restoreFromData(data) {
         appData.settings.endDate = dateToISO(defaultEnd);
     }
     if (!appData.headers) appData.headers = ["項目1", "項目2", "時間"];
-
+    
     appData.todoColumns = "項目1, 項目2, 時間, 実施内容, 計画, 実績";
 
     projectNameInput.value = data.projectName || "標準の計画";
@@ -339,7 +339,7 @@ function scrollToToday() {
         const x = todayIdx * CELL_WIDTH;
         const scrollContainer = document.querySelector(".gantt-scroll-container");
         if (scrollContainer) {
-            scrollContainer.scrollLeft = x - (scrollContainer.clientWidth / 2) + 280;
+            scrollContainer.scrollLeft = x - (scrollContainer.clientWidth / 2) + 280; 
         }
     }
 }
@@ -444,7 +444,7 @@ function addTaskRow(initialData = null) {
     if (initialData && initialData.isHidden) leftRow.classList.add("task-hidden");
 
     const grip = document.createElement("div");
-    grip.className = "drag-handle";
+    grip.className = "drag-handle"; 
     grip.dataset.taskId = id;
 
     const gripIcon = document.createElement("span");
@@ -460,17 +460,17 @@ function addTaskRow(initialData = null) {
     insertBtn.addEventListener("mousedown", stopEvt);
     insertBtn.addEventListener("dragstart", stopEvt);
     insertBtn.addEventListener("click", (e) => { e.stopPropagation(); insertTaskAfter(id); });
-
+    
     grip.appendChild(insertBtn);
 
     grip.addEventListener('dragstart', (e) => {
         if (selectionMode !== 0) {
-            e.preventDefault();
+            e.preventDefault(); 
             return;
         }
         handleRowDragStart.call(grip, e);
     });
-
+    
     grip.addEventListener("click", (e) => {
         if (selectionMode !== 0) {
             e.stopPropagation();
@@ -485,8 +485,8 @@ function addTaskRow(initialData = null) {
     leftRow.appendChild(grip);
 
     leftRow.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; return false; });
-    leftRow.addEventListener('dragenter', function () { this.classList.add('over'); });
-    leftRow.addEventListener('dragleave', function () { this.classList.remove('over'); });
+    leftRow.addEventListener('dragenter', function() { this.classList.add('over'); });
+    leftRow.addEventListener('dragleave', function() { this.classList.remove('over'); });
     leftRow.addEventListener('drop', handleRowDrop);
     leftRow.addEventListener('dragend', handleRowDragEnd);
 
@@ -534,8 +534,8 @@ function addTaskRow(initialData = null) {
         isSelected: false
     };
     taskObjects.push(task);
-
-    renderGrip(task);
+    
+    renderGrip(task); 
 
     setupRowInteraction(task);
     activeTaskId = id;
@@ -570,7 +570,7 @@ function insertTaskAfter(targetTaskId) {
         leftRowsContainer.insertBefore(newTask.leftRowEl, targetTask.leftRowEl.nextSibling);
         rowsContainer.insertBefore(newTask.rowEl, targetTask.rowEl.nextSibling);
     }
-    taskObjects.pop();
+    taskObjects.pop(); 
     taskObjects.splice(targetIndex + 1, 0, newTask);
     triggerSave();
 }
@@ -585,7 +585,7 @@ function renderAllSegments() {
 
     taskObjects.forEach((task) => {
         task.segLayerEl.innerHTML = "";
-
+        
         if (task.segments.length === 0) {
             task.rowEl.style.height = BASE_ROW_HEIGHT + "px";
             task.leftRowEl.style.height = BASE_ROW_HEIGHT + "px";
@@ -596,7 +596,7 @@ function renderAllSegments() {
         const taskDates = {};
         task.segments.forEach(seg => seg._lane = 0);
         const sortedSegs = [...task.segments].sort((a, b) => (a.startDate !== b.startDate) ? (a.startDate < b.startDate ? -1 : 1) : (a.endDate < b.endDate ? -1 : 1));
-
+        
         let maxLaneUsed = 0;
         sortedSegs.forEach(seg => {
             let requiredLane = 0;
@@ -693,13 +693,20 @@ function drawRangeSegment(task, seg, sIdx, eIdx, topPx) {
         div.classList.add("fixed");
     }
 
-    const lHandle = document.createElement("div"); lHandle.className = "resize-handle left";
-    lHandle.addEventListener("mousedown", (e) => initDrag(e, task, seg, "resize-left", div));
-    div.appendChild(lHandle);
+    // [修正] 実績(progressEndDate)がある場合は開始日が固定されるため、左ハンドルは生成しない
+    if (!seg.progressEndDate) {
+        const lHandle = document.createElement("div"); lHandle.className = "resize-handle left";
+        lHandle.addEventListener("mousedown", (e) => initDrag(e, task, seg, "resize-left", div));
+        div.appendChild(lHandle);
+    }
 
-    const rHandle = document.createElement("div"); rHandle.className = "resize-handle right";
-    rHandle.addEventListener("mousedown", (e) => initDrag(e, task, seg, "resize-right", div));
-    div.appendChild(rHandle);
+    // [修正] 完全に完了している(progress >= end)場合のみ右ハンドルを生成しない（未完了なら生成する）
+    const isFullyDone = seg.progressEndDate && (isoToDate(seg.progressEndDate).getTime() >= isoToDate(seg.endDate).getTime());
+    if (!isFullyDone) {
+        const rHandle = document.createElement("div"); rHandle.className = "resize-handle right";
+        rHandle.addEventListener("mousedown", (e) => initDrag(e, task, seg, "resize-right", div));
+        div.appendChild(rHandle);
+    }
 
     div.addEventListener("mousedown", (e) => {
         if (e.target.classList.contains("resize-handle")) return;
@@ -749,13 +756,13 @@ function drawRangeSegment(task, seg, sIdx, eIdx, topPx) {
         }
     }
 
-    const pointsData = [{ x: sc, d: isoToDate(seg.startDate), isEnd: false }, { x: ec, d: isoToDate(seg.endDate), isEnd: true }];
+    const pointsData = [ { x: sc, d: isoToDate(seg.startDate), isEnd: false }, { x: ec, d: isoToDate(seg.endDate), isEnd: true } ];
     pointsData.forEach((ptData) => {
         const pt = document.createElement("div");
         let isDone = seg.progressEndDate && (isoToDate(seg.progressEndDate).getTime() >= ptData.d.getTime());
         pt.className = "point" + (isDone ? " done" : "") + (isProgressSelected ? " progress-active" : "");
         pt.style.left = ptData.x + "px"; pt.style.top = topPx + "px";
-
+        
         pt.style.cursor = "grab";
         pt.addEventListener("mousedown", (e) => initDrag(e, task, seg, "move", div));
 
@@ -769,11 +776,11 @@ function drawRangeSegment(task, seg, sIdx, eIdx, topPx) {
         lab.className = "segment-label" + (isCompletedFull ? " done" : "") + (isProgressSelected ? " progress-active" : "");
         lab.textContent = seg.label;
         lab.style.left = (sc + ec) / 2 + "px";
-
+        
         const baseTop = topPx - 19;
-        lab.dataset.baseTop = baseTop;
+        lab.dataset.baseTop = baseTop; 
         lab.style.top = baseTop + "px";
-
+        
         addSegEvents(lab, task, seg);
         task.segLayerEl.appendChild(lab);
     }
@@ -787,7 +794,7 @@ function drawPointSegment(task, seg, idx, topPx) {
     const pt = document.createElement("div");
     pt.className = "point" + (isDone ? " done" : "") + (isProgressSelected ? " progress-active" : "");
     pt.style.left = c + "px"; pt.style.top = topPx + "px";
-
+    
     pt.style.cursor = "grab";
     pt.addEventListener("mousedown", (e) => initDrag(e, task, seg, "move", pt));
 
@@ -797,7 +804,7 @@ function drawPointSegment(task, seg, idx, topPx) {
     const iso = timelineDays[idx].iso;
     const valDiv = document.createElement("div");
     valDiv.className = "daily-val";
-    valDiv.style.left = c + "px";
+    valDiv.style.left = c + "px"; 
     valDiv.style.top = (topPx + 4) + "px";
     if (seg.dailyValues && seg.dailyValues[iso] != null) {
         valDiv.textContent = seg.dailyValues[iso];
@@ -809,12 +816,12 @@ function drawPointSegment(task, seg, idx, topPx) {
         const lab = document.createElement("div");
         lab.className = "segment-label" + (isDone ? " done" : "") + (isProgressSelected ? " progress-active" : "");
         lab.textContent = seg.label;
-        lab.style.left = c + "px";
-
+        lab.style.left = c + "px"; 
+        
         const baseTop = topPx - 19;
         lab.dataset.baseTop = baseTop;
         lab.style.top = baseTop + "px";
-
+        
         addSegEvents(lab, task, seg);
         task.segLayerEl.appendChild(lab);
     }
@@ -861,34 +868,55 @@ function adjustLabelPositions(task) {
 function initDrag(e, task, seg, type, el) {
     if (e.button !== 0) return;
 
+    let dragType = type;
+    // [修正] 完了済み(progressEndDateあり)の場合、「blocked」という状態でドラッグを開始する。
+    // 即座にreturnせず、グローバルなマウスイベントをあえて設定することで、
+    // ドラッグ中のマウス操作をこの機能が「乗っ取る」形にし、裏側のセルに反応させないようにする。
     if (type === "move" && seg.progressEndDate) {
-        return;
+        dragType = "blocked";
     }
 
+    // デフォルト動作(テキスト選択など)と伝播を阻止
+    e.preventDefault();
+    e.stopPropagation();
+
     dragState = {
-        isDragging: true, type: type, taskId: task.id, segId: seg.id, startX: e.clientX,
+        isDragging: true, type: dragType, taskId: task.id, segId: seg.id, startX: e.clientX,
         originalLeft: parseFloat(el.style.left), originalWidth: parseFloat(el.style.width),
         originalStartDate: seg.startDate, originalEndDate: seg.endDate, el: el
     };
     el.classList.add("dragging");
-    document.body.style.cursor = type === "move" ? "grabbing" : "col-resize";
+    
+    // blockedの場合は「掴んでいる」ことを示すカーソルにするが、位置は更新されない
+    if (dragType === "blocked") {
+        document.body.style.cursor = "grabbing"; // 掴んでいるが動かせない
+    } else {
+        document.body.style.cursor = type === "move" ? "grabbing" : "col-resize";
+    }
+    
     document.addEventListener("mousemove", handleGlobalMouseMove);
     document.addEventListener("mouseup", handleGlobalMouseUp);
 }
 
 function handleGlobalMouseMove(e) {
     if (!dragState.isDragging) return;
-    e.preventDefault();
+    e.preventDefault(); // これにより裏側のテキスト選択やセルの反応を防ぐ
+
+    // [修正] blocked状態（実績ありの移動）なら、座標計算もスタイル更新もしない
+    if (dragState.type === "blocked") {
+        return;
+    }
+
     const diffPx = e.clientX - dragState.startX;
     if (dragState.type === "move") {
         dragState.el.style.left = (dragState.originalLeft + diffPx) + "px";
     } else if (dragState.type === "resize-right") {
-        const newW = Math.max(0, dragState.originalWidth + diffPx);
+        const newW = Math.max(0, dragState.originalWidth + diffPx); 
         dragState.el.style.width = newW + "px";
     } else if (dragState.type === "resize-left") {
         const newLeft = dragState.originalLeft + diffPx;
         const newWidth = dragState.originalWidth - diffPx;
-        if (newWidth >= 0) {
+        if (newWidth >= 0) { 
             dragState.el.style.left = newLeft + "px";
             dragState.el.style.width = newWidth + "px";
         }
@@ -897,38 +925,43 @@ function handleGlobalMouseMove(e) {
 
 function handleGlobalMouseUp(e) {
     if (!dragState.isDragging) return;
-    const diffPx = e.clientX - dragState.startX;
-    const dayDelta = Math.round(diffPx / CELL_WIDTH);
-    const task = taskObjects.find(t => t.id === dragState.taskId);
-    const seg = task ? task.segments.find(s => s.id === dragState.segId) : null;
 
-    if (task && seg && dayDelta !== 0) {
-        if (dragState.type === "move") {
-            seg.startDate = shiftDateStr(dragState.originalStartDate, dayDelta);
-            seg.endDate = shiftDateStr(dragState.originalEndDate, dayDelta);
+    // [修正] blocked状態なら、何も計算せずにクリーンアップへ進む
+    if (dragState.type !== "blocked") {
+        const diffPx = e.clientX - dragState.startX;
+        const dayDelta = Math.round(diffPx / CELL_WIDTH);
+        const task = taskObjects.find(t => t.id === dragState.taskId);
+        const seg = task ? task.segments.find(s => s.id === dragState.segId) : null;
 
-            if (seg.dailyValues) {
-                const newVals = {};
-                Object.keys(seg.dailyValues).forEach(iso => newVals[shiftDateStr(iso, dayDelta)] = seg.dailyValues[iso]);
-                seg.dailyValues = newVals;
+        if (task && seg && dayDelta !== 0) {
+            if (dragState.type === "move") {
+                seg.startDate = shiftDateStr(dragState.originalStartDate, dayDelta);
+                seg.endDate = shiftDateStr(dragState.originalEndDate, dayDelta);
+                
+                if (seg.dailyValues) {
+                    const newVals = {};
+                    Object.keys(seg.dailyValues).forEach(iso => newVals[shiftDateStr(iso, dayDelta)] = seg.dailyValues[iso]);
+                    seg.dailyValues = newVals;
+                }
+                if (seg.dailyResults) {
+                    const newRes = {};
+                    Object.keys(seg.dailyResults).forEach(iso => newRes[shiftDateStr(iso, dayDelta)] = seg.dailyResults[iso]);
+                    seg.dailyResults = newRes;
+                }
+
+            } else if (dragState.type === "resize-right") {
+                const newEnd = shiftDateStr(dragState.originalEndDate, dayDelta);
+                seg.endDate = newEnd; 
+                if(seg.endDate < seg.startDate) seg.endDate = seg.startDate;
+            } else if (dragState.type === "resize-left") {
+                const newStart = shiftDateStr(dragState.originalStartDate, dayDelta);
+                seg.startDate = newStart;
+                if(seg.startDate > seg.endDate) seg.startDate = seg.endDate;
             }
-            if (seg.dailyResults) {
-                const newRes = {};
-                Object.keys(seg.dailyResults).forEach(iso => newRes[shiftDateStr(iso, dayDelta)] = seg.dailyResults[iso]);
-                seg.dailyResults = newRes;
-            }
-
-        } else if (dragState.type === "resize-right") {
-            const newEnd = shiftDateStr(dragState.originalEndDate, dayDelta);
-            seg.endDate = newEnd;
-            if (seg.endDate < seg.startDate) seg.endDate = seg.startDate;
-        } else if (dragState.type === "resize-left") {
-            const newStart = shiftDateStr(dragState.originalStartDate, dayDelta);
-            seg.startDate = newStart;
-            if (seg.startDate > seg.endDate) seg.startDate = seg.endDate;
+            triggerSave();
         }
-        triggerSave();
     }
+
     if (dragState.el) dragState.el.classList.remove("dragging");
     document.body.style.cursor = "";
     document.removeEventListener("mousemove", handleGlobalMouseMove);
@@ -961,8 +994,8 @@ function handleCellClick(task, index) {
         const targetSeg = task.segments.find(s => s.id === activeProgressSegmentId);
         if (targetSeg) {
             targetSeg.progressEndDate = clickedIso;
-            activeProgressSegmentId = null;
-            renderAllSegments();
+            activeProgressSegmentId = null; 
+            renderAllSegments(); 
             triggerSave();
         } else {
             alert("選択中のバーはこの行にありません。");
@@ -977,26 +1010,26 @@ function handleCellClick(task, index) {
             const endIso = clickedIso;
             const s = startIso < endIso ? startIso : endIso;
             const e = startIso < endIso ? endIso : startIso;
-
+            
             const newSeg = {
                 id: "seg_" + Date.now() + "_" + Math.random().toString(36).slice(2),
-                startDate: s, endDate: e, type: "range",
-                label: "...",
+                startDate: s, endDate: e, type: "range", 
+                label: "...", 
                 progressEndDate: null, dailyValues: {}, dailyResults: {}
             };
             task.segments.push(newSeg);
 
-            task.pendingStartIndex = null;
+            task.pendingStartIndex = null; 
             task.pendingStartDate = null;
-
+            
             renderAllSegments();
 
             setTimeout(() => {
                 const initialLabel = "新規作業";
                 const inputLabel = prompt("計画内容を入力してください:", initialLabel);
-
+                
                 if (inputLabel === null) {
-                    task.segments.pop();
+                    task.segments.pop(); 
                     renderAllSegments();
                 } else {
                     newSeg.label = (inputLabel.trim() === "") ? initialLabel : inputLabel;
@@ -1015,26 +1048,26 @@ function handleSegClick(task, seg, addMode) {
 
 function addSegEvents(el, task, seg) {
     el.addEventListener("click", (e) => { e.stopPropagation(); handleSegClick(task, seg, e.shiftKey); });
-
+    
     el.addEventListener("dblclick", (e) => {
         e.preventDefault();
         e.stopPropagation();
-
+        
         if (window.getSelection) {
             window.getSelection().removeAllRanges();
         }
-
+        
         const nl = window.prompt("計画内容:", seg.label || "");
-        if (nl !== null) {
-            seg.label = nl.trim();
-            renderAllSegments();
-            triggerSave();
+        if (nl !== null) { 
+            seg.label = nl.trim(); 
+            renderAllSegments(); 
+            triggerSave(); 
         }
     });
-
+    
     el.addEventListener("contextmenu", (e) => {
         e.preventDefault();
-        e.stopPropagation();
+        e.stopPropagation(); 
         showSegmentContextMenu(e, task, seg);
     });
 }
@@ -1070,7 +1103,7 @@ function showContextMenu(e, taskId) {
     const unhideBtn = document.getElementById("cmUnhide");
     if (task.isHidden) { hideBtn.style.display = "none"; unhideBtn.style.display = "block"; }
     else { hideBtn.style.display = "block"; unhideBtn.style.display = "none"; }
-
+    
     segmentContextMenu.style.display = "none";
     contextMenu.style.display = "block";
     contextMenu.style.left = e.pageX + "px";
@@ -1080,15 +1113,15 @@ function showContextMenu(e, taskId) {
 function showSegmentContextMenu(e, task, seg) {
     contextMenuTargetSegId = seg.id;
     contextMenuTargetTaskForSeg = task;
-
+    
     contextMenu.style.display = "none";
     segmentContextMenu.style.display = "block";
     segmentContextMenu.style.left = e.pageX + "px";
     segmentContextMenu.style.top = e.pageY + "px";
 }
 
-document.addEventListener("click", () => {
-    contextMenu.style.display = "none";
+document.addEventListener("click", () => { 
+    contextMenu.style.display = "none"; 
     segmentContextMenu.style.display = "none";
 });
 
@@ -1117,7 +1150,7 @@ document.getElementById("ctxSegDelete").addEventListener("click", () => {
         if (confirm("選択の計画を削除しますか？")) {
             contextMenuTargetTaskForSeg.segments = contextMenuTargetTaskForSeg.segments.filter(s => s.id !== contextMenuTargetSegId);
             if (activeProgressSegmentId === contextMenuTargetSegId) activeProgressSegmentId = null;
-            renderAllSegments();
+            renderAllSegments(); 
             triggerSave();
         }
     }
@@ -1187,16 +1220,16 @@ function setupControlEvents() {
 
         rowSelectHeader.addEventListener("click", () => {
             selectionMode = (selectionMode + 1) % 3;
-
+            
             if (selectionMode === 0) rowSelectHeader.textContent = "□";
             else if (selectionMode === 1) rowSelectHeader.textContent = "☑️";
-            else if (selectionMode === 2) rowSelectHeader.textContent = "🔳";
+            else if (selectionMode === 2) rowSelectHeader.textContent = "🔳"; 
 
             const delBtn = document.getElementById("deleteSelectedBtn");
-            if (delBtn) delBtn.style.display = (selectionMode !== 0) ? "inline-block" : "none";
+            if(delBtn) delBtn.style.display = (selectionMode !== 0) ? "inline-block" : "none";
 
             taskObjects.forEach(t => {
-                if (selectionMode === 1) t.isSelected = true;
+                if (selectionMode === 1) t.isSelected = true; 
                 else if (selectionMode === 2) t.isSelected = false;
                 else t.isSelected = false;
                 renderGrip(t);
@@ -1226,32 +1259,32 @@ function setupControlEvents() {
     }
 
     document.getElementById("todoColumnsInput").addEventListener("change", triggerSave);
-
+    
     document.getElementById("outlookBtn").addEventListener("click", exportTodoToOutlookCSV);
-
+    
     document.getElementById("todoCsvBtn").addEventListener("click", exportTodoToCSV);
 
     const todoBtn = document.getElementById("todoBtn");
-    if (todoBtn) todoBtn.addEventListener("click", () => {
-        const todoPanel = document.getElementById("todoPanel");
-        currentTodoDate = new Date();
-        updateTodoTable(currentTodoDate);
-        todoPanel.classList.remove("settings-hidden");
+    if(todoBtn) todoBtn.addEventListener("click", () => {
+         const todoPanel = document.getElementById("todoPanel");
+         currentTodoDate = new Date(); 
+         updateTodoTable(currentTodoDate);
+         todoPanel.classList.remove("settings-hidden"); 
     });
-
+    
     initTodoFeature();
 }
 
 function updateTodoTable(dateObj) {
     const todoDateDisplay = document.getElementById("todoDateDisplay");
     todoDateDisplay.textContent = `${dateToISO(dateObj)} (${WEEKDAYS[dateObj.getDay()]})`;
-
+    
     const table = document.querySelector(".todo-table");
     let colgroup = table.querySelector("colgroup");
-    if (colgroup) table.removeChild(colgroup);
+    if (colgroup) table.removeChild(colgroup); 
     colgroup = document.createElement("colgroup");
     table.insertBefore(colgroup, table.firstChild);
-
+    
     const colWidths = [
         "40px",  // 選択
         "15%",   // 項目1
@@ -1270,7 +1303,7 @@ function updateTodoTable(dateObj) {
     const h1 = document.getElementById("lh1").textContent;
     const h2 = document.getElementById("lh2").textContent;
     const h3 = document.getElementById("lh3").textContent;
-
+    
     const displayCols = ["□", h1, h2, h3, "実施内容", "計画", "実績"];
     const colKeys = ["select", "h1", "h2", "h3", "desc", "plan", "actual"];
 
@@ -1286,9 +1319,9 @@ function updateTodoTable(dateObj) {
             th.style.textAlign = "center";
             th.textContent = todoSelectionState ? "☑️" : "□";
             th.addEventListener("click", () => {
-                todoSelectionState = !todoSelectionState;
+                todoSelectionState = !todoSelectionState; 
                 th.textContent = todoSelectionState ? "☑️" : "□";
-
+                
                 const checkboxes = document.querySelectorAll(".todo-row-checkbox");
                 checkboxes.forEach(cb => {
                     cb.textContent = todoSelectionState ? "☑️" : "□";
@@ -1302,7 +1335,7 @@ function updateTodoTable(dateObj) {
     thead.appendChild(trH);
 
     const iso = dateToISO(dateObj);
-    const tbody = document.getElementById("todoTableBody");
+    const tbody = document.getElementById("todoTableBody"); 
     tbody.innerHTML = "";
     let hasItem = false;
 
@@ -1312,7 +1345,7 @@ function updateTodoTable(dateObj) {
 
     taskObjects.forEach(task => {
         if (task.isHidden) return;
-
+        
         const editable1 = task.leftRowEl.children[1].querySelector(".editable");
         const editable2 = task.leftRowEl.children[2].querySelector(".editable");
         const editable3 = task.leftRowEl.children[3].querySelector(".editable");
@@ -1335,14 +1368,14 @@ function updateTodoTable(dateObj) {
 
                 colKeys.forEach((key) => {
                     const td = document.createElement("td");
-
+                    
                     if (key === "select") {
                         td.style.textAlign = "center";
                         td.style.cursor = "pointer";
                         td.className = "todo-row-checkbox";
-                        td.textContent = todoSelectionState ? "☑️" : "□";
+                        td.textContent = todoSelectionState ? "☑️" : "□"; 
                         td.dataset.checked = todoSelectionState ? "true" : "false";
-
+                        
                         td.addEventListener("click", (e) => {
                             e.stopPropagation();
                             const isChecked = td.dataset.checked === "true";
@@ -1375,9 +1408,9 @@ function updateTodoTable(dateObj) {
                             val = (seg.dailyValues || {})[iso] || "";
                             input.style.textAlign = "center";
                             input.addEventListener("change", (e) => {
-                                if (!seg.dailyValues) seg.dailyValues = {};
+                                if(!seg.dailyValues) seg.dailyValues = {};
                                 seg.dailyValues[iso] = e.target.value;
-                                if (!e.target.value) delete seg.dailyValues[iso];
+                                if(!e.target.value) delete seg.dailyValues[iso];
                                 renderAllSegments();
                                 triggerSave();
                                 updateTodoTable(dateObj); // 合計再計算のため
@@ -1387,9 +1420,9 @@ function updateTodoTable(dateObj) {
                             val = (seg.dailyResults || {})[iso] || "";
                             input.style.textAlign = "center";
                             input.addEventListener("change", (e) => {
-                                if (!seg.dailyResults) seg.dailyResults = {};
+                                if(!seg.dailyResults) seg.dailyResults = {};
                                 seg.dailyResults[iso] = e.target.value;
-                                if (!e.target.value) delete seg.dailyResults[iso];
+                                if(!e.target.value) delete seg.dailyResults[iso];
                                 triggerSave();
                                 updateTodoTable(dateObj); // 合計再計算のため
                             });
@@ -1408,15 +1441,12 @@ function updateTodoTable(dateObj) {
 
     // [修正] 合計行（tfoot）の追加
     let tfoot = table.querySelector("tfoot");
-    if (tfoot) table.removeChild(tfoot);
+    if(tfoot) table.removeChild(tfoot);
     tfoot = document.createElement("tfoot");
     const trF = document.createElement("tr");
-
-    // カラム構成: [Select, h1, h2, h3, desc, plan, actual]
-    // 合計を表示するのは plan(index 5) と actual(index 6)。
-    // それより前は結合する。
+    
     const tdLabel = document.createElement("td");
-    tdLabel.colSpan = 5;
+    tdLabel.colSpan = 5; 
     tdLabel.textContent = "合計";
     tdLabel.style.textAlign = "right";
     trF.appendChild(tdLabel);
@@ -1435,13 +1465,13 @@ function updateTodoTable(dateObj) {
     table.appendChild(tfoot);
 
     document.getElementById("todoColumnsInput").value = "項目1, 項目2, 時間, 実施内容, 計画, 実績";
-
+    
     checkTodoDeleteBtnVisibility();
 }
 
 function checkTodoDeleteBtnVisibility() {
     const delBtn = document.getElementById("todoDeleteBtn");
-    if (!delBtn) return;
+    if(!delBtn) return;
     const checkedItems = document.querySelectorAll(".todo-row-checkbox[data-checked='true']");
     delBtn.style.display = (checkedItems.length > 0) ? "inline-block" : "none";
 }
@@ -1469,10 +1499,10 @@ function exportTodoToOutlookCSV() {
         return;
     }
 
-    const headers = ["件名", "開始日", "開始時刻", "終了日", "終了時刻", "プライベート", "公開する時間帯の種類", "秘密度", "優先度"];
+    const headers = ["件名","開始日","開始時刻","終了日","終了時刻","プライベート","公開する時間帯の種類","秘密度","優先度"];
     const rows = [];
 
-    let currentMin = 510;
+    let currentMin = 510; 
 
     items.forEach((item) => {
         const subject = `${item.item1}：${item.desc}`;
@@ -1511,10 +1541,10 @@ function exportTodoToCSV() {
     const filename = `ToDoList_${formatTimestamp(new Date())}.csv`;
     const thead = document.getElementById("todoThead");
     const tbody = document.getElementById("todoTableBody");
-
+    
     const headers = [];
     const ths = thead.querySelectorAll("th");
-    for (let i = 1; i < ths.length; i++) {
+    for(let i=1; i<ths.length; i++) {
         headers.push('"' + ths[i].textContent.replace(/"/g, '""') + '"');
     }
 
@@ -1522,9 +1552,9 @@ function exportTodoToCSV() {
     tbody.querySelectorAll("tr").forEach(tr => {
         const rowData = [];
         const tds = tr.querySelectorAll("td");
-        for (let i = 1; i < tds.length; i++) {
+        for(let i=1; i<tds.length; i++) {
             const input = tds[i].querySelector("input");
-            if (input) {
+            if(input) {
                 rowData.push('"' + input.value.replace(/"/g, '""') + '"');
             } else {
                 rowData.push('""');
@@ -1560,12 +1590,12 @@ function downloadAsShiftJIS(content, filename) {
     for (let i = 0; i < content.length; i++) {
         unicodeList.push(content.charCodeAt(i));
     }
-
+    
     const sjisCodeList = Encoding.convert(unicodeList, {
         to: 'SJIS',
         from: 'UNICODE'
     });
-
+    
     const u8Array = new Uint8Array(sjisCodeList);
     const blob = new Blob([u8Array], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -1584,9 +1614,9 @@ function addTodoRow(dateObj) {
     const newSeg = {
         id: "seg_" + Date.now() + "_" + Math.random().toString(36).slice(2),
         startDate: iso,
-        endDate: iso,
+        endDate: iso, 
         type: "point",
-        label: "",
+        label: "", 
         progressEndDate: null,
         dailyValues: {},
         dailyResults: {}
@@ -1600,31 +1630,31 @@ function addTodoRow(dateObj) {
 function initTodoFeature() {
     const todoPanel = document.getElementById("todoPanel");
     if (!todoPanel) return;
-
+    
     const update = () => updateTodoTable(currentTodoDate);
 
     document.getElementById("todoCloseBtn").addEventListener("click", () => todoPanel.classList.add("settings-hidden"));
-
-    document.getElementById("todoPrevDay").addEventListener("click", () => {
-        currentTodoDate.setDate(currentTodoDate.getDate() - 1);
-        todoSelectionState = false;
-        update();
+    
+    document.getElementById("todoPrevDay").addEventListener("click", () => { 
+        currentTodoDate.setDate(currentTodoDate.getDate() - 1); 
+        todoSelectionState = false; 
+        update(); 
     });
-    document.getElementById("todoNextDay").addEventListener("click", () => {
-        currentTodoDate.setDate(currentTodoDate.getDate() + 1);
+    document.getElementById("todoNextDay").addEventListener("click", () => { 
+        currentTodoDate.setDate(currentTodoDate.getDate() + 1); 
         todoSelectionState = false;
-        update();
+        update(); 
     });
-    document.getElementById("todoTodayBtn").addEventListener("click", () => {
-        currentTodoDate = new Date();
+    document.getElementById("todoTodayBtn").addEventListener("click", () => { 
+        currentTodoDate = new Date(); 
         todoSelectionState = false;
-        update();
+        update(); 
     });
 
     document.getElementById("todoAddRowBtn").addEventListener("click", () => {
         addTodoRow(currentTodoDate);
     });
-
+    
     const footerControls = document.querySelector(".todo-footer > div:nth-child(2)");
     if (!document.getElementById("todoDeleteBtn")) {
         const delBtn = document.createElement("button");
@@ -1635,15 +1665,15 @@ function initTodoFeature() {
         delBtn.style.fontSize = "12px";
         delBtn.style.marginLeft = "8px";
         delBtn.textContent = "🗑️ 選択行を削除";
-        delBtn.style.display = "none";
-
+        delBtn.style.display = "none"; 
+        
         delBtn.addEventListener("click", () => {
             const checkboxes = document.querySelectorAll(".todo-row-checkbox[data-checked='true']");
             if (checkboxes.length === 0) {
                 alert("削除する項目を選択してください。");
                 return;
             }
-
+            
             if (confirm(`${checkboxes.length} 件の項目を削除しますか？`)) {
                 const itemsToDelete = [];
                 checkboxes.forEach(cb => {
@@ -1664,13 +1694,13 @@ function initTodoFeature() {
                 if (changeOccurred) {
                     renderAllSegments();
                     triggerSave();
-                    update();
+                    update(); 
                 }
             }
         });
-
+        
         const addBtn = document.getElementById("todoAddRowBtn");
-        if (addBtn) {
+        if(addBtn) {
             addBtn.insertAdjacentElement('afterend', delBtn);
         }
     }
@@ -1678,16 +1708,16 @@ function initTodoFeature() {
     const win = todoPanel.querySelector(".todo-window"), header = todoPanel.querySelector(".todo-header");
     let isDragging = false, startX, startY, initL, initT;
     header.addEventListener("mousedown", (e) => {
-        if (e.target.closest("button")) return;
+        if(e.target.closest("button")) return;
         isDragging = true; startX = e.clientX; startY = e.clientY;
         const r = win.getBoundingClientRect(); initL = r.left; initT = r.top;
         header.style.cursor = "grabbing"; document.body.style.userSelect = "none";
     });
     document.addEventListener("mousemove", (e) => {
         if (!isDragging) return;
-        win.style.left = (initL + e.clientX - startX) + "px";
+        win.style.left = (initL + e.clientX - startX) + "px"; 
         win.style.top = (initT + e.clientY - startY) + "px";
-
+        
         win.style.width = win.offsetWidth + "px";
         win.style.height = win.offsetHeight + "px";
     });

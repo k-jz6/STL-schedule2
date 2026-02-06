@@ -128,6 +128,17 @@
         </div>
     </div>
 
+    <div id="taskMemoPanel" class="task-memo-panel memo-hidden" aria-hidden="true">
+        <div class="task-memo-header" id="taskMemoHeader">
+            <span id="taskMemoTitle">メモ</span>
+            <button id="taskMemoClose" class="close-btn" type="button" aria-label="閉じる">×</button>
+        </div>
+        <textarea id="taskMemoTextarea" maxlength="3000" placeholder="この項目のメモを入力 (最大3000文字)"></textarea>
+        <div class="task-memo-footer">
+            <span id="taskMemoCount">0 / 3000</span>
+        </div>
+    </div>
+
     <div id="contextMenu" class="context-menu">
         <div class="menu-item" id="cmComplete">✅ 完了/未完了</div>
         <div class="menu-item" id="cmHide">👁️ 非表示</div>

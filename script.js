@@ -201,6 +201,15 @@ const settingsPanel = document.getElementById("settingsPanel");
 const totalRow = document.getElementById("totalRow");
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
+const taskMemoPanel = document.getElementById("taskMemoPanel");
+const taskMemoHeader = document.getElementById("taskMemoHeader");
+const taskMemoTitle = document.getElementById("taskMemoTitle");
+const taskMemoTextarea = document.getElementById("taskMemoTextarea");
+const taskMemoCount = document.getElementById("taskMemoCount");
+const taskMemoClose = document.getElementById("taskMemoClose");
+let memoPanelTaskId = null;
+let memoPanelPinned = false;
+
 // ============================================
 // ヘルパー関数
 // ============================================
@@ -231,6 +240,58 @@ function getByteLength(str) {
     return len;
 }
 
+function getTaskTitle(task) {
+    const t1 = task.leftRowEl.children[1].firstElementChild.textContent.trim();
+    const t2 = task.leftRowEl.children[2].firstElementChild.textContent.trim();
+    const t3 = task.leftRowEl.children[3].firstElementChild.textContent.trim();
+    const parts = [t1, t2, t3].filter(Boolean);
+    if (parts.length === 0) return "メモ";
+    return "メモ: " + parts.join(" / ");
+}
+
+function updateMemoCount(text) {
+    const len = text.length;
+    taskMemoCount.textContent = `${len} / 3000`;
+}
+
+function positionMemoPanel(anchorEl) {
+    const rect = anchorEl.getBoundingClientRect();
+    const panelRect = taskMemoPanel.getBoundingClientRect();
+    const padding = 12;
+    let left = rect.right + 10;
+    let top = rect.top;
+    if (left + panelRect.width > window.innerWidth - padding) {
+        left = rect.left - panelRect.width - 10;
+    }
+    if (left < padding) left = padding;
+    if (top + panelRect.height > window.innerHeight - padding) {
+        top = window.innerHeight - panelRect.height - padding;
+    }
+    if (top < padding) top = padding;
+    taskMemoPanel.style.left = `${left}px`;
+    taskMemoPanel.style.top = `${top}px`;
+}
+
+function openTaskMemo(task, anchorEl, pin = false) {
+    if (!task || !taskMemoPanel) return;
+    memoPanelTaskId = task.id;
+    memoPanelPinned = pin;
+    taskMemoTitle.textContent = getTaskTitle(task);
+    const memoText = task.memo || "";
+    taskMemoTextarea.value = memoText;
+    updateMemoCount(memoText);
+    taskMemoPanel.classList.remove("memo-hidden");
+    taskMemoPanel.setAttribute("aria-hidden", "false");
+    positionMemoPanel(anchorEl || task.leftRowEl);
+}
+
+function closeTaskMemoPanel() {
+    memoPanelTaskId = null;
+    memoPanelPinned = false;
+    taskMemoPanel.classList.add("memo-hidden");
+    taskMemoPanel.setAttribute("aria-hidden", "true");
+}
+
 // ============================================
 // データ同期 & 保存
 // ============================================
@@ -242,6 +303,7 @@ function syncDataModel() {
             label2: t.leftRowEl.children[2].firstElementChild.textContent,
             label3: t.leftRowEl.children[3].firstElementChild.textContent,
             segments: t.segments,
+            memo: t.memo || "",
             isDone: t.isDone || false,
             isHidden: t.isHidden || false
         };
@@ -495,6 +557,14 @@ function addTaskRow(initialData = null) {
         const ed = document.createElement("div"); ed.className = "editable"; ed.contentEditable = "true"; ed.dataset.placeholder = ph;
         if (text) ed.textContent = text;
         ed.addEventListener('blur', triggerSave);
+        if (ph === "項目1") {
+            const openMemo = (e) => {
+                e.stopPropagation();
+                openTaskMemo(task, task.leftRowEl, true);
+            };
+            cell.addEventListener("click", openMemo);
+            ed.addEventListener("click", openMemo);
+        }
         cell.appendChild(ed);
         return cell;
     };
@@ -528,6 +598,7 @@ function addTaskRow(initialData = null) {
     const task = {
         id, rowEl: row, leftRowEl: leftRow, cellRowEl: cellRow, segLayerEl: segLayer,
         segments: initialData ? initialData.segments : [],
+        memo: initialData ? (initialData.memo || "") : "",
         isDone: initialData ? !!initialData.isDone : false,
         isHidden: initialData ? !!initialData.isHidden : false,
         pendingStartIndex: null, pendingStartDate: null,
@@ -1273,6 +1344,60 @@ function setupControlEvents() {
     });
     
     initTodoFeature();
+
+    if (taskMemoTextarea) {
+        taskMemoTextarea.addEventListener("input", () => {
+            let text = taskMemoTextarea.value || "";
+            if (text.length > 3000) {
+                text = text.slice(0, 3000);
+                taskMemoTextarea.value = text;
+            }
+            updateMemoCount(text);
+            const task = taskObjects.find(t => t.id === memoPanelTaskId);
+            if (task) {
+                task.memo = text;
+                triggerSave();
+            }
+        });
+        taskMemoTextarea.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") closeTaskMemoPanel();
+        });
+    }
+
+    if (taskMemoClose) {
+        taskMemoClose.addEventListener("click", () => closeTaskMemoPanel());
+    }
+
+    if (taskMemoPanel && taskMemoHeader) {
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+        let initL = 0;
+        let initT = 0;
+
+        taskMemoHeader.addEventListener("mousedown", (e) => {
+            if (e.target.closest("button")) return;
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            const r = taskMemoPanel.getBoundingClientRect();
+            initL = r.left;
+            initT = r.top;
+            document.body.style.userSelect = "none";
+        });
+        document.addEventListener("mousemove", (e) => {
+            if (!isDragging) return;
+            const left = initL + (e.clientX - startX);
+            const top = initT + (e.clientY - startY);
+            taskMemoPanel.style.left = `${left}px`;
+            taskMemoPanel.style.top = `${top}px`;
+        });
+        document.addEventListener("mouseup", () => {
+            if (!isDragging) return;
+            isDragging = false;
+            document.body.style.userSelect = "";
+        });
+    }
 }
 
 function updateTodoTable(dateObj) {

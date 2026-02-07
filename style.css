@@ -117,6 +117,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     flex-grow: 1;
     position: relative;
     max-height: 100%;
+    padding-bottom: 0;
+    box-sizing: content-box;
 }
 
 .gantt-inner { 
@@ -126,10 +128,22 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .gantt-left {
-    flex: 0 0 280px; border-right: 1px solid var(--border);
+    flex: 0 0 280px; border-right: none;
     display: flex; flex-direction: column;
     /* Sticky設定: 左側固定 */
-    position: sticky; left: 0; z-index: 100; background: #fff; 
+    position: sticky; left: 0; z-index: 100; background: #fff;
+    border-left: 1px solid var(--border);
+}
+.gantt-left::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 1px;
+    background: var(--border);
+    pointer-events: none;
+    z-index: 150;
 }
 
 .left-header, .left-row {
@@ -150,12 +164,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .left-header div {
-    border: 1px solid var(--border); background: #f9fafb;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: #f9fafb;
     font-size: 11px; font-weight: 600; display: flex;
     align-items: center; padding-left: 4px; color: var(--text-muted);
     height: 28px;
     outline: none;
 }
+.left-header { border-top: 1px solid var(--border); }
 .left-header div:focus {
     background: #fff; border-color: var(--accent);
 }
@@ -168,14 +185,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     position: relative;
     z-index: 1;
 }
-.left-row:hover {
-    z-index: 500; /* 次の行より上にするための大きな値 */
-}
+.left-row:hover { z-index: 2; }
 
 .left-row.dragging { opacity: 0.5; background: #f3f4f6; }
 
 .drag-handle {
-    border: 1px solid var(--border); background: #f9fafb; cursor: grab;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: #f9fafb; cursor: grab;
     display: flex; align-items: center; justify-content: center;
     font-size: 14px; color: var(--text-muted); height: 100%;
     position: relative; 
@@ -185,20 +202,30 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .drag-handle:active { cursor: grabbing; }
 
 .left-row .label-cell {
-    border: 1px solid var(--border); padding: 4px 6px;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 4px 6px;
     background: #fff; display: flex; align-items: flex-start;
     padding-top: 8px; height: 100%; min-height: 52px;
 }
+.left-row { }
 .left-row:nth-child(2n+1) .label-cell { background: #fdfdfd; }
 
 /* 左下の「合計」セルを固定 */
 .left-footer-placeholder {
-    height: 28px; background: #f9fafb; border: 1px solid var(--border);
-    border-top: 2px solid var(--border); font-size: 12px; font-weight: bold;
+    height: 28px; background: #f9fafb;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    border-top: 0; font-size: 12px; font-weight: bold;
     display: flex; align-items: center; justify-content: center;
     color: #333; margin-top: auto;
     /* Sticky Bottom */
     position: sticky; bottom: 0; z-index: 110; 
+    position: sticky;
+}
+.left-footer-placeholder {
+    box-shadow: 0 -2px 0 var(--border);
+    background-clip: padding-box;
 }
 
 .gantt-right {
@@ -208,10 +235,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .header-row { display: grid; align-items: stretch; font-size: 10px; background: #fff; }
 .header-day {
-    border: 1px solid var(--border); text-align: center;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    text-align: center;
     display: flex; flex-direction: column; justify-content: center;
     padding: 2px 0 3px; background: #fff; height: 28px;
 }
+.header-row { border-top: 1px solid var(--border); }
 .header-day-num { font-size: 11px; font-weight: 600; }
 .header-day-week { font-size: 10px; color: var(--text-muted); }
 .header-day.weekend { background: var(--weekend-bg); }
@@ -227,9 +257,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .cell {
     width: 28px; height: 100%; min-height: 52px;
-    border: 1px solid var(--border); background: var(--cell-bg);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: var(--cell-bg);
     position: relative; cursor: pointer;
 }
+.task-row { }
 .cell.weekend { background: var(--weekend-bg); }
 .cell.holiday { background: var(--holiday-bg); }
 .cell.today { background: var(--today-bg) !important; }
@@ -322,16 +355,33 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* 右側の合計行を固定 */
 .total-row {
     display: grid; height: 28px; background: #fff;
-    border-top: 2px solid var(--border); border-bottom: 1px solid var(--border);
+    border-top: 0; border-bottom: 1px solid var(--border);
     margin-top: auto; width: fit-content; min-width: 100%;
     /* Sticky Bottom */
     position: sticky; bottom: 0; z-index: 90;
+    position: sticky;
+}
+.total-row {
+    box-shadow: 0 -2px 0 var(--border);
+    background-clip: padding-box;
+}
+
+/* 合計境界のラインを常に一定に見せる */
+.gantt-left,
+.gantt-right {
+    contain: paint;
 }
 .total-cell {
     border-right: 1px solid var(--border); text-align: center;
     font-size: 11px; font-weight: bold; line-height: 25px;
     color: #333; background: #fff;
 }
+.left-row.is-last-visible .label-cell,
+.left-row.is-last-visible .drag-handle {
+    border-bottom: 0;
+}
+.task-row.is-last-visible .cell { border-bottom: 0; }
+.total-row { }
 .total-cell.weekend { background: var(--weekend-bg); }
 .total-cell.holiday { background: var(--holiday-bg); }
 .total-cell.today { background: var(--today-bg) !important; }
@@ -504,6 +554,34 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     color: #fff;
     border-color: #2563eb;
     box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
+}
+
+.left-resize-overlay {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    z-index: 2000;
+}
+.left-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: col-resize;
+    pointer-events: auto;
+    background: transparent;
+}
+.row-resize-handle {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -3px;
+    height: 6px;
+    cursor: row-resize;
+    z-index: 20;
 }
 
 /* Task Memo Panel */

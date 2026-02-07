@@ -154,6 +154,7 @@ let appData = {
     },
     headers: ["項目1", "項目2", "時間"], 
     todoColumns: "項目1, 項目2, 時間, 実施内容, 計画, 実績",
+    columnWidths: [30, 120, 90, 40],
     tasks: [],
     memo: ""
 };
@@ -210,6 +211,17 @@ const taskMemoClose = document.getElementById("taskMemoClose");
 let memoPanelTaskId = null;
 let memoPanelPinned = false;
 
+let leftColumnWidths = [30, 120, 90, 40];
+let isResizingCol = false;
+let resizeColIndex = null;
+let resizeStartX = 0;
+let resizeStartWidth = 0;
+
+let isResizingRow = false;
+let resizeRowTaskId = null;
+let resizeStartY = 0;
+let resizeStartHeight = 0;
+
 // ============================================
 // ヘルパー関数
 // ============================================
@@ -238,6 +250,120 @@ function getByteLength(str) {
         len += ((c >= 0x0 && c <= 0x7f) || (c >= 0xff61 && c <= 0xff9f)) ? 1 : 2;
     }
     return len;
+}
+
+function applyLeftColumnWidths() {
+    const cols = leftColumnWidths.map(w => `${w}px`).join(" ");
+    const header = document.querySelector(".left-header");
+    if (header) header.style.gridTemplateColumns = cols;
+    const rows = document.querySelectorAll(".left-row");
+    rows.forEach(r => {
+        r.style.gridTemplateColumns = cols;
+        const handle = r.querySelector(".row-resize-handle");
+        if (handle) handle.style.left = `${leftColumnWidths[0]}px`;
+    });
+    const left = document.querySelector(".gantt-left");
+    if (left) {
+        const total = leftColumnWidths.reduce((a, b) => a + b, 0);
+        left.style.flex = `0 0 ${total}px`;
+        left.style.width = `${total}px`;
+    }
+    updateLeftResizeHandles();
+}
+
+function measureMinWidthForHeader(index) {
+    const ids = ["rowSelectHeader", "lh1", "lh2", "lh3"];
+    const el = document.getElementById(ids[index]);
+    if (!el) return 40;
+    const text = el.textContent || "";
+    const probe = document.createElement("span");
+    probe.style.position = "absolute";
+    probe.style.visibility = "hidden";
+    probe.style.whiteSpace = "nowrap";
+    probe.style.fontSize = "11px";
+    probe.style.fontWeight = "600";
+    probe.textContent = text;
+    document.body.appendChild(probe);
+    const width = probe.getBoundingClientRect().width;
+    document.body.removeChild(probe);
+    return Math.ceil(width + 16);
+}
+
+function clampColumnWidth(index, width) {
+    const min = (index === 0) ? 26 : measureMinWidthForHeader(index);
+    const max = (index === 0) ? 60 : 420;
+    return Math.max(min, Math.min(max, width));
+}
+
+function ensureLeftResizeOverlay() {
+    const left = document.querySelector(".gantt-left");
+    if (!left) return null;
+    let overlay = left.querySelector(".left-resize-overlay");
+    if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.className = "left-resize-overlay";
+        left.appendChild(overlay);
+    }
+    return overlay;
+}
+
+function updateLeftResizeHandles() {
+    const overlay = ensureLeftResizeOverlay();
+    if (!overlay) return;
+    overlay.innerHTML = "";
+    let acc = 0;
+    for (let i = 0; i < leftColumnWidths.length; i++) {
+        acc += leftColumnWidths[i];
+        const handle = document.createElement("div");
+        handle.className = "left-resize-handle";
+        handle.style.left = `${acc - 4}px`;
+        handle.dataset.colIndex = String(i);
+        handle.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            isResizingCol = true;
+            resizeColIndex = i;
+            resizeStartX = e.clientX;
+            resizeStartWidth = leftColumnWidths[i];
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+        });
+        overlay.appendChild(handle);
+    }
+}
+
+function computeTaskBaseHeight(task) {
+    if (!timelineDays.length) return BASE_ROW_HEIGHT;
+    if (!task.segments || task.segments.length === 0) return BASE_ROW_HEIGHT;
+
+    const taskDates = {};
+    task.segments.forEach(seg => seg._lane = 0);
+    const sortedSegs = [...task.segments].sort((a, b) => (a.startDate !== b.startDate) ? (a.startDate < b.startDate ? -1 : 1) : (a.endDate < b.endDate ? -1 : 1));
+    let maxLaneUsed = 0;
+    sortedSegs.forEach(seg => {
+        let requiredLane = 0;
+        let sIdx = dateToIndex(seg.startDate);
+        let eIdx = dateToIndex(seg.endDate);
+        if (sIdx === -1 || eIdx === -1) return;
+        while (true) {
+            let overlap = false;
+            for (let i = Math.min(sIdx, eIdx); i <= Math.max(sIdx, eIdx); i++) {
+                const iso = timelineDays[i].iso;
+                if (taskDates[iso] && taskDates[iso].includes(requiredLane)) { overlap = true; break; }
+            }
+            if (!overlap) break;
+            requiredLane++;
+        }
+        seg._lane = requiredLane;
+        maxLaneUsed = Math.max(maxLaneUsed, requiredLane);
+        for (let i = Math.min(sIdx, eIdx); i <= Math.max(sIdx, eIdx); i++) {
+            const iso = timelineDays[i].iso;
+            if (!taskDates[iso]) taskDates[iso] = [];
+            taskDates[iso].push(requiredLane);
+        }
+    });
+    const laneCount = maxLaneUsed + 1;
+    return Math.max(BASE_ROW_HEIGHT, 30 + (laneCount * SEGMENT_OFFSET_Y) - 20);
 }
 
 function getTaskTitle(task) {
@@ -304,6 +430,7 @@ function syncDataModel() {
             label3: t.leftRowEl.children[3].firstElementChild.textContent,
             segments: t.segments,
             memo: t.memo || "",
+            customHeight: t.customHeight || 0,
             isDone: t.isDone || false,
             isHidden: t.isHidden || false
         };
@@ -317,6 +444,7 @@ function syncDataModel() {
         document.getElementById("lh3").textContent
     ];
     appData.todoColumns = document.getElementById("todoColumnsInput").value;
+    appData.columnWidths = leftColumnWidths.slice();
 }
 
 function triggerSave() {
@@ -334,7 +462,12 @@ freeMemo.addEventListener("input", () => {
     triggerSave();
 });
 ["lh1", "lh2", "lh3"].forEach(id => {
-    document.getElementById(id).addEventListener("blur", triggerSave);
+    document.getElementById(id).addEventListener("blur", () => {
+        const idx = id === "lh1" ? 1 : (id === "lh2" ? 2 : 3);
+        leftColumnWidths[idx] = clampColumnWidth(idx, leftColumnWidths[idx]);
+        applyLeftColumnWidths();
+        triggerSave();
+    });
 });
 
 // ============================================
@@ -351,6 +484,8 @@ async function initializeApp() {
         document.getElementById("lh2").textContent = appData.headers[1];
         document.getElementById("lh3").textContent = appData.headers[2];
         document.getElementById("todoColumnsInput").value = appData.todoColumns;
+        leftColumnWidths = appData.columnWidths.slice();
+        applyLeftColumnWidths();
         buildTimeline();
         buildHeader();
         addTaskRow();
@@ -368,6 +503,7 @@ function restoreFromData(data) {
         appData.settings.endDate = dateToISO(defaultEnd);
     }
     if (!appData.headers) appData.headers = ["項目1", "項目2", "時間"];
+    if (!appData.columnWidths) appData.columnWidths = [30, 120, 90, 40];
     
     appData.todoColumns = "項目1, 項目2, 時間, 実施内容, 計画, 実績";
 
@@ -387,6 +523,8 @@ function restoreFromData(data) {
 
     buildTimeline();
     buildHeader();
+    leftColumnWidths = appData.columnWidths.slice();
+    applyLeftColumnWidths();
 
     if (appData.tasks && appData.tasks.length > 0) {
         appData.tasks.forEach(tData => addTaskRow(tData));
@@ -571,6 +709,22 @@ function addTaskRow(initialData = null) {
     leftRow.appendChild(createInput("項目1", initialData ? initialData.label1 : ""));
     leftRow.appendChild(createInput("項目2", initialData ? initialData.label2 : ""));
     leftRow.appendChild(createInput("時間", initialData ? initialData.label3 : ""));
+    leftRow.style.gridTemplateColumns = leftColumnWidths.map(w => `${w}px`).join(" ");
+
+    const rowResize = document.createElement("div");
+    rowResize.className = "row-resize-handle";
+    rowResize.style.left = `${leftColumnWidths[0]}px`;
+    rowResize.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        isResizingRow = true;
+        resizeRowTaskId = id;
+        resizeStartY = e.clientY;
+        resizeStartHeight = leftRow.getBoundingClientRect().height;
+        document.body.style.cursor = "row-resize";
+        document.body.style.userSelect = "none";
+    });
+    leftRow.appendChild(rowResize);
 
     leftRow.addEventListener('contextmenu', (e) => { e.preventDefault(); showContextMenu(e, id); });
     leftRowsContainer.appendChild(leftRow);
@@ -599,6 +753,7 @@ function addTaskRow(initialData = null) {
         id, rowEl: row, leftRowEl: leftRow, cellRowEl: cellRow, segLayerEl: segLayer,
         segments: initialData ? initialData.segments : [],
         memo: initialData ? (initialData.memo || "") : "",
+        customHeight: initialData ? (initialData.customHeight || 0) : 0,
         isDone: initialData ? !!initialData.isDone : false,
         isHidden: initialData ? !!initialData.isHidden : false,
         pendingStartIndex: null, pendingStartDate: null,
@@ -658,8 +813,10 @@ function renderAllSegments() {
         task.segLayerEl.innerHTML = "";
         
         if (task.segments.length === 0) {
-            task.rowEl.style.height = BASE_ROW_HEIGHT + "px";
-            task.leftRowEl.style.height = BASE_ROW_HEIGHT + "px";
+            task.baseHeight = BASE_ROW_HEIGHT;
+            const finalHeight = Math.max(BASE_ROW_HEIGHT, task.customHeight || 0);
+            task.rowEl.style.height = finalHeight + "px";
+            task.leftRowEl.style.height = finalHeight + "px";
             if (task.pendingStartIndex != null) drawDraftStart(task);
             return;
         }
@@ -694,8 +851,10 @@ function renderAllSegments() {
 
         const laneCount = maxLaneUsed + 1;
         const newHeight = Math.max(BASE_ROW_HEIGHT, 30 + (laneCount * SEGMENT_OFFSET_Y) - 20);
-        task.rowEl.style.height = newHeight + "px";
-        task.leftRowEl.style.height = newHeight + "px";
+        task.baseHeight = newHeight;
+        const finalHeight = Math.max(newHeight, task.customHeight || 0);
+        task.rowEl.style.height = finalHeight + "px";
+        task.leftRowEl.style.height = finalHeight + "px";
 
         task.segments.forEach((seg) => {
             const lane = seg._lane || 0;
@@ -718,6 +877,7 @@ function renderAllSegments() {
         adjustLabelPositions(task);
     });
     calculateTotals();
+    updateBottomRowBorders();
 }
 
 function calculateTotals() {
@@ -1058,6 +1218,25 @@ function setupRowInteraction(task) {
     });
 }
 
+function updateBottomRowBorders() {
+    const rows = rowsContainer.querySelectorAll(".task-row");
+    if (rows.length === 0) return;
+    rows.forEach(r => r.classList.remove("is-last-visible"));
+    let last = null;
+    for (let i = rows.length - 1; i >= 0; i--) {
+        if (!rows[i].classList.contains("task-hidden")) { last = rows[i]; break; }
+    }
+    if (last) last.classList.add("is-last-visible");
+
+    const leftRows = leftRowsContainer.querySelectorAll(".left-row");
+    leftRows.forEach(r => r.classList.remove("is-last-visible"));
+    let lastLeft = null;
+    for (let i = leftRows.length - 1; i >= 0; i--) {
+        if (!leftRows[i].classList.contains("task-hidden")) { lastLeft = leftRows[i]; break; }
+    }
+    if (lastLeft) lastLeft.classList.add("is-last-visible");
+}
+
 function handleCellClick(task, index) {
     const clickedIso = timelineDays[index].iso;
 
@@ -1364,6 +1543,8 @@ function setupControlEvents() {
         });
     }
 
+    updateLeftResizeHandles();
+
     if (taskMemoClose) {
         taskMemoClose.addEventListener("click", () => closeTaskMemoPanel());
     }
@@ -1398,6 +1579,41 @@ function setupControlEvents() {
             document.body.style.userSelect = "";
         });
     }
+
+    document.addEventListener("mousemove", (e) => {
+        if (isResizingCol) {
+            const delta = e.clientX - resizeStartX;
+            const newWidth = clampColumnWidth(resizeColIndex, resizeStartWidth + delta);
+            leftColumnWidths[resizeColIndex] = newWidth;
+            applyLeftColumnWidths();
+        } else if (isResizingRow) {
+            const task = taskObjects.find(t => t.id === resizeRowTaskId);
+            if (!task) return;
+            const delta = e.clientY - resizeStartY;
+            const baseHeight = task.baseHeight || computeTaskBaseHeight(task);
+            const newHeight = Math.max(baseHeight, resizeStartHeight + delta);
+            task.customHeight = newHeight;
+            task.rowEl.style.height = newHeight + "px";
+            task.leftRowEl.style.height = newHeight + "px";
+        }
+    });
+    document.addEventListener("mouseup", () => {
+        if (isResizingCol) {
+            isResizingCol = false;
+            resizeColIndex = null;
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            triggerSave();
+        }
+        if (isResizingRow) {
+            isResizingRow = false;
+            resizeRowTaskId = null;
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            renderAllSegments();
+            triggerSave();
+        }
+    });
 }
 
 function updateTodoTable(dateObj) {
@@ -1589,8 +1805,6 @@ function updateTodoTable(dateObj) {
     tfoot.appendChild(trF);
     table.appendChild(tfoot);
 
-    document.getElementById("todoColumnsInput").value = "項目1, 項目2, 時間, 実施内容, 計画, 実績";
-    
     checkTodoDeleteBtnVisibility();
 }
 
@@ -1664,27 +1878,43 @@ function exportTodoToOutlookCSV() {
 
 function exportTodoToCSV() {
     const filename = `ToDoList_${formatTimestamp(new Date())}.csv`;
-    const thead = document.getElementById("todoThead");
     const tbody = document.getElementById("todoTableBody");
-    
-    const headers = [];
-    const ths = thead.querySelectorAll("th");
-    for(let i=1; i<ths.length; i++) {
-        headers.push('"' + ths[i].textContent.replace(/"/g, '""') + '"');
+
+    const columnsRaw = document.getElementById("todoColumnsInput").value || "";
+    let columns = columnsRaw.split(",").map(s => s.trim()).filter(Boolean);
+    if (columns.length === 0) {
+        columns = ["項目1", "項目2", "時間", "実施内容", "計画", "実績"];
     }
+
+    const headers = columns.map(c => '"' + c.replace(/"/g, '""') + '"');
+    const iso = dateToISO(currentTodoDate);
 
     const rows = [];
     tbody.querySelectorAll("tr").forEach(tr => {
-        const rowData = [];
-        const tds = tr.querySelectorAll("td");
-        for(let i=1; i<tds.length; i++) {
-            const input = tds[i].querySelector("input");
-            if(input) {
-                rowData.push('"' + input.value.replace(/"/g, '""') + '"');
-            } else {
-                rowData.push('""');
-            }
-        }
+        const taskId = tr.dataset.taskId;
+        const segId = tr.dataset.segId;
+        const task = taskObjects.find(t => t.id === taskId);
+        const seg = task ? task.segments.find(s => s.id === segId) : null;
+
+        const t1 = task ? task.leftRowEl.children[1].querySelector(".editable").textContent : "";
+        const t2 = task ? task.leftRowEl.children[2].querySelector(".editable").textContent : "";
+        const t3 = task ? task.leftRowEl.children[3].querySelector(".editable").textContent : "";
+        const desc = seg ? (seg.label || "") : "";
+        const plan = seg && seg.dailyValues ? (seg.dailyValues[iso] || "") : "";
+        const actual = seg && seg.dailyResults ? (seg.dailyResults[iso] || "") : "";
+        const memo = task ? (task.memo || "") : "";
+
+        const rowData = columns.map(col => {
+            let v = "";
+            if (col === "項目1") v = t1;
+            else if (col === "項目2") v = t2;
+            else if (col === "時間") v = t3;
+            else if (col === "実施内容") v = desc;
+            else if (col === "計画") v = plan;
+            else if (col === "実績") v = actual;
+            else if (col === "メモ") v = memo;
+            return '"' + String(v).replace(/"/g, '""') + '"';
+        });
         rows.push(rowData.join(","));
     });
 
